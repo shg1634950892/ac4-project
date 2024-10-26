@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sailing Data Plot</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>Sailing Data Plot</h1>
+    
+    <!-- 按钮 -->
+    <div>
+        <button id="fetchHistory">获取历史数据</button>
+        <button id="pauseButton">暂停/恢复实时更新</button>
+    </div>
+    
+    <!-- 显示航行数据的图表 -->
+    <canvas id="sailingChart" width="800" height="400"></canvas>
+
+    <script>
+        // WebSocket连接到本地服务器
+        const socket = new WebSocket('ws://localhost:8765');
+
+        // 初始化Chart.js图表
+        const ctx = document.getElementById('sailingChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'Sailing Data',
+                    data: [],
+                    backgroundColor: 'rgba(0, 123, 255, 0.5)'
+                }]
+            },
+            options: {
+                scales: {
+                    x: {
+                        title: { display: true, text: 'X Coordinate (Position X)' }
+                    },
+                    y: {
+                        title: { display: true, text: 'Y Coordinate (Position Y)' }
+                    }
+                }
+            }
+        });
+
+        let isPaused = false;
+
+        fetch('http://localhost:5000/api/get_sailing_data', {
+    mode: 'cors',  // 确保启用 CORS 模式
+})
+.then(response => response.json())
+.then(data => {
+    console.log('Received data:', data);
+})
+.catch(error => {
+    console.error('Error fetching data:', error);
+});
+
+
+        // 暂停按钮
+        document.getElementById('pauseButton').addEventListener('click', () => {
+            isPaused = !isPaused;
+            console.log(isPaused ? 'Paused' : 'Resumed');
+        });
+
+        // 获取历史数据按钮
+        document.getElementById('fetchHistory').addEventListener('click', async () => {
+            const response = await fetch('http://localhost:5000/api/get_sailing_data');
+            const data = await response.json();
+            data.forEach(item => {
+                if (item.Position) {
+                    chart.data.datasets[0].data.push({x: item.Position.x, y: item.Position.y});
+                }
+            });
+            chart.update();
+        });
+
+        // 处理WebSocket接收到的数据
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (!isPaused && data.Position) {
+                chart.data.datasets[0].data.push({x: data.Position.x, y: data.Position.y});
+                chart.update();
+            }
+        };
+
+        // WebSocket连接事件
+        socket.onopen = function() {
+            console.log('WebSocket connection established');
+        };
+
+        // WebSocket断开连接事件
+        socket.onclose = function() {
+            console.log('WebSocket connection lost');
+        };
+    </script>
+</body>
+</html>
